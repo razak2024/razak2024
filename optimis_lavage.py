@@ -271,6 +271,8 @@ class WellWashingAnalysis:
                 
                 # Rename columns
                 df1 = df1.rename(columns=column_mapping)
+                df1 = df1.reset_index(drop=True)
+               
                 
                 # If we have a second sheet, try to incorporate that data as well
                 if len(sheet_names) > 1:
@@ -293,7 +295,9 @@ class WellWashingAnalysis:
                     
                     # Rename columns in second sheet
                     if sheet2_mapping:
+                        
                         df2 = df2.rename(columns=sheet2_mapping)
+                        df2 = df2.reset_index(drop=True)
                         
                         # Add missing columns if needed
                         if 'Périmètre' not in df2.columns:
