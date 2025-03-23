@@ -231,12 +231,23 @@ def main():
         uploaded_file = st.sidebar.file_uploader("Choisir un fichier Excel", type=["xlsx", "xls"])
         if uploaded_file is not None:
             try:
-                analyzer.df = pd.read_excel(uploaded_file)
+                # Try different engines for Excel files
+                try:
+                    # First try with openpyxl (for .xlsx)
+                    analyzer.df = pd.read_excel(uploaded_file, engine='openpyxl')
+                except Exception:
+                    # If that fails, try with xlrd (for .xls)
+                    # Reset file position to beginning
+                    uploaded_file.seek(0)
+                    analyzer.df = pd.read_excel(uploaded_file, engine='xlrd')
+                
                 # Rename columns to make them easier to handle
                 analyzer.df.columns = [col.replace(' ', '_') for col in analyzer.df.columns]
                 st.sidebar.success("Fichier chargé avec succès!")
             except Exception as e:
                 st.sidebar.error(f"Erreur lors du chargement du fichier: {str(e)}")
+                # Add more detailed error information
+                st.sidebar.info("Conseil: Vérifiez que votre fichier est au format Excel valide (.xlsx ou .xls). Si vous utilisez un format particulier, essayez de l'exporter en Excel standard.")
         else:
             st.sidebar.info("Veuillez télécharger un fichier Excel ou utiliser les données d'exemple.")
             analyzer.df = None
@@ -506,53 +517,169 @@ def main():
                     display_df['Dernier_lavage'] = display_df['Dernier_lavage'].dt.strftime('%d/%m/%Y')
                     display_df['Prochain_lavage'] = display_df['Prochain_lavage'].dt.strftime('%d/%m/%Y')
                     
-                    st.dataframe(display_df[['Puits', 'Dernier_lavage', 'Prochain_lavage', 'Priorité']], use_container_width=True)
+                    st.dataframe(display_df[['Puits', 'Dernier_lavage', 'Prochain_lavage', 'Jours_avant', 'Priorité']], use_container_width=True)
                     
-                    # Optimized calendar
-                    st.markdown("### Calendrier optimisé de lavage:")
+                    # Group washings by week for better planning
+                    st.markdown("### Regroupement par semaine:")
                     
-                    calendar_data = []
-                    for i, row in results['planned_dates'].iterrows():
-                        status = "À FAIRE IMMÉDIATEMENT" if row['Jours_avant'] <= 0 else f"dans {int(row['Jours_avant'])} jours"
-                        calendar_data.append({
-                            'Date': row['Prochain_lavage'].strftime('%d/%m/%Y'),
-                            'Puits': row['Puits'],
-                            'Statut': status
-                        })
+                    # Convert string dates back to datetime for processing
+                    display_df['Prochain_lavage'] = pd.to_datetime(display_df['Prochain_lavage'], format='%d/%m/%Y')
                     
-                    calendar_df = pd.DataFrame(calendar_data)
-                    st.dataframe(calendar_df, use_container_width=True)
+                    # Add week number to dataframe
+                    display_df['Semaine'] = display_df['Prochain_lavage'].dt.isocalendar().week
+                    display_df['Année'] = display_df['Prochain_lavage'].dt.isocalendar().year
                     
-                    # Recommendations
+                    # Group by week and count
+                    weekly_count = display_df.groupby(['Année', 'Semaine']).size().reset_index(name='Nombre de lavages')
+                    
+                    # Convert back to string for display
+                    display_df['Prochain_lavage'] = display_df['Prochain_lavage'].dt.strftime('%d/%m/%Y')
+                    
+                    for _, row in weekly_count.iterrows():
+                        week_wells = display_df[(display_df['Semaine'] == row['Semaine']) & 
+                                              (display_df['Année'] == row['Année'])]
+                        
+                        st.write(f"**Semaine {row['Semaine']} de {row['Année']}:** {row['Nombre de lavages']} lavages planifiés")
+                        st.dataframe(week_wells[['Puits', 'Prochain_lavage', 'Priorité']], use_container_width=True)
+                    
+                    # Highlight wells that need to be washed in the next 7 days
+                    urgent_wells = display_df[display_df['Jours_avant'] <= 7]
+                    
+                    if not urgent_wells.empty:
+                        st.markdown("### Lavages urgents (7 jours):")
+                        st.dataframe(urgent_wells[['Puits', 'Prochain_lavage', 'Jours_avant', 'Priorité']], use_container_width=True)
+                    
+                    # Check if there are wells with close washing dates
                     if results['close_washings']:
-                        st.markdown("### Optimisation des lavages groupés:")
-                        
-                        st.write("Puits avec des dates de lavage proches (à moins de 2 jours):")
-                        for pair in results['close_washings']:
-                            st.write(f"- {pair[0]} et {pair[1]}")
-                        
-                        st.info("Recommandation: Envisager de regrouper ces lavages pour optimiser les ressources.")
-                    
-                    # General recommendations
-                    st.markdown("### Recommandations:")
-                    st.markdown("""
-                    1. Suivre le calendrier des priorités pour planifier efficacement les lavages
-                    2. Regrouper les lavages proches dans le temps lorsque possible
-                    3. Mettre en place un suivi systématique des dates pour améliorer la planification
-                    4. Établir une procédure standard d'évaluation post-lavage
-                    """)
+                        st.markdown("### Lavages rapprochés (opportunités de regroupement):")
+                        for well1, well2 in results['close_washings']:
+                            st.write(f"Les puits {well1} et {well2} peuvent être lavés ensemble (dates rapprochées)")
                     
                     # Download results button
                     csv = display_df.to_csv(index=False).encode('utf-8')
                     st.download_button(
-                        label="Télécharger le calendrier en CSV",
+                        label="Télécharger le planning en CSV",
                         data=csv,
-                        file_name="calendrier_lavages.csv",
+                        file_name="planning_lavages.csv",
                         mime="text/csv",
                     )
-
-    else:
-        st.info("Veuillez charger des données pour commencer l'analyse.")
+                    
+                    # Add a calendar view
+                    st.markdown("### Calendrier des lavages:")
+                    
+                    # Create a calendar view with HTML and CSS
+                    cal_html = """
+                    <style>
+                    .calendar {
+                        width: 100%;
+                        border-collapse: collapse;
+                    }
+                    .calendar th {
+                        background-color: #f2f2f2;
+                        padding: 10px;
+                        text-align: center;
+                        border: 1px solid #ddd;
+                    }
+                    .calendar td {
+                        height: 80px;
+                        vertical-align: top;
+                        width: 14.28%;
+                        border: 1px solid #ddd;
+                        padding: 5px;
+                    }
+                    .calendar td.other-month {
+                        background-color: #f9f9f9;
+                        color: #999;
+                    }
+                    .calendar .event {
+                        background-color: #4CAF50;
+                        color: white;
+                        padding: 3px;
+                        margin-bottom: 3px;
+                        border-radius: 3px;
+                        font-size: 12px;
+                    }
+                    .calendar .event.high {
+                        background-color: #f44336;
+                    }
+                    .calendar .event.medium {
+                        background-color: #ff9800;
+                    }
+                    </style>
+                    """
+                    
+                    # Add a simple visualization using Streamlit components
+                    today = datetime.now()
+                    start_date = today - pd.Timedelta(days=today.weekday())
+                    end_date = start_date + pd.Timedelta(days=41)  # 6 weeks
+                    
+                    calendar_events = []
+                    
+                    # Convert to datetime for processing if necessary
+                    if isinstance(display_df['Prochain_lavage'].iloc[0], str):
+                        display_df['Prochain_lavage'] = pd.to_datetime(display_df['Prochain_lavage'], format='%d/%m/%Y')
+                    
+                    # Create events for the calendar
+                    for _, row in display_df.iterrows():
+                        date = row['Prochain_lavage']
+                        if start_date <= date <= end_date:
+                            priority_class = ""
+                            if "HAUTE" in row['Priorité']:
+                                priority_class = "high"
+                            elif "MOYENNE" in row['Priorité']:
+                                priority_class = "medium"
+                            
+                            calendar_events.append({
+                                'date': date,
+                                'well': row['Puits'],
+                                'priority': priority_class
+                            })
+                    
+                    # Generate 6-week calendar
+                    weeks = []
+                    current_date = start_date
+                    
+                    while current_date < end_date:
+                        week = []
+                        for _ in range(7):
+                            day_events = [event for event in calendar_events if event['date'].date() == current_date.date()]
+                            week.append({
+                                'date': current_date,
+                                'events': day_events,
+                                'is_other_month': current_date.month != today.month
+                            })
+                            current_date += pd.Timedelta(days=1)
+                        weeks.append(week)
+                    
+                    # Format the calendar HTML
+                    cal_html += '<table class="calendar"><tr><th>Lun</th><th>Mar</th><th>Mer</th><th>Jeu</th><th>Ven</th><th>Sam</th><th>Dim</th></tr>'
+                    
+                    for week in weeks:
+                        cal_html += '<tr>'
+                        for day in week:
+                            other_month_class = ' class="other-month"' if day['is_other_month'] else ''
+                            cal_html += f'<td{other_month_class}><div>{day["date"].day}</div>'
+                            
+                            for event in day['events']:
+                                event_class = f'event {event["priority"]}' if event['priority'] else 'event'
+                                cal_html += f'<div class="{event_class}">{event["well"]}</div>'
+                                
+                            cal_html += '</td>'
+                        cal_html += '</tr>'
+                    
+                    cal_html += '</table>'
+                    
+                    st.markdown(cal_html, unsafe_allow_html=True)
+                    
+                    # Recommendations
+                    st.subheader("Recommandations:")
+                    st.markdown("""
+                    1. Planifier les lavages selon le calendrier proposé
+                    2. Regrouper les lavages proches pour optimiser la logistique
+                    3. Donner la priorité aux puits à haute priorité (en retard)
+                    4. Mettre à jour régulièrement les données pour affiner la planification
+                    5. Considérer l'historique d'efficacité des lavages précédents
+                    """)
 
 if __name__ == "__main__":
     main()
