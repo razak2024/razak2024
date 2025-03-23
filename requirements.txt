@@ -1,6 +1,6 @@
-pandas 
+pandas
 matplotlib
 seaborn
 numpy
 datetime
-io
+streamlit
