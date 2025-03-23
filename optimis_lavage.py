@@ -305,7 +305,7 @@ class WellWashingAnalysis:
                         required_cols = ['Puits', 'Date_de_Fermeture', 'Heures_d_Arret', 'MAP']
                         if all(col in df2.columns for col in required_cols):
                             # Merge the two dataframes
-                            combined_df = pd.concat([df1, df2[df1.columns.intersection(df2.columns)]], ignore_index=True)
+                            combined_df = pd.concat([df1, df2[list(df1.columns.intersection(df2.columns))]], ignore_index=True)
                             df1 = combined_df
                 
                 # Process data types
