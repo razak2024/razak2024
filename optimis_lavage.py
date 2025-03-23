@@ -207,6 +207,147 @@ class WellWashingAnalysis:
             }, None
         
         return None, "Impossible de calculer les fréquences de lavage"
+    
+    # Inside your WellWashingAnalysis class, modify the file loading part:
+    def load_excel_file(self, uploaded_file):
+        """Loads and processes Excel file with multiple sheets"""
+        try:
+            # Load all sheets
+            xls = pd.ExcelFile(uploaded_file)
+            sheet_names = xls.sheet_names
+            
+            # Check if we have at least one sheet
+            if len(sheet_names) == 0:
+                return None, "Le fichier Excel ne contient aucune feuille de calcul."
+            
+            # Try to load the first sheet
+            df1 = pd.read_excel(xls, sheet_name=0)
+            
+            # Check if this is the main data sheet by looking at columns
+            # Look at the first few rows to determine column structure
+            if len(df1.columns) >= 5:  # At least 5 columns expected for main data
+                # Detect column names based on content pattern
+                # Map columns to expected names
+                column_mapping = {}
+                
+                # Inspect column names and try to map them
+                for col in df1.columns:
+                    col_lower = str(col).lower()
+                    if any(well_term in col_lower for well_term in ['puits', 'well', 'nom']):
+                        column_mapping[col] = 'Puits'
+                    elif any(term in col_lower for term in ['périmètre', 'perimetre', 'zone']):
+                        column_mapping[col] = 'Périmètre'
+                    elif any(term in col_lower for term in ['date', 'fermeture']):
+                        column_mapping[col] = 'Date_de_Fermeture'
+                    elif any(term in col_lower for term in ['heure', 'durée', 'duree', 'pompage']):
+                        column_mapping[col] = 'Heures_d_Arret'
+                    elif any(term in col_lower for term in ['map', 'volume', 'collecte']):
+                        column_mapping[col] = 'MAP'
+                    elif any(term in col_lower for term in ['cause', 'comment', 'raison']):
+                        column_mapping[col] = 'Cause_d_Arret'
+                
+                # If we couldn't map all required columns, try to guess by position
+                required_columns = ['Puits', 'Périmètre', 'Date_de_Fermeture', 'Heures_d_Arret', 'MAP', 'Cause_d_Arret']
+                if not all(col in column_mapping.values() for col in required_columns):
+                    # If df1 has at least 6 columns, map by position
+                    if len(df1.columns) >= 6:
+                        columns_list = list(df1.columns)
+                        mapping_by_position = {
+                            columns_list[0]: 'Puits',
+                            columns_list[1]: 'Périmètre',
+                            columns_list[2]: 'Date_de_Fermeture',
+                            columns_list[3]: 'Heures_d_Arret',
+                            columns_list[4]: 'MAP',
+                            columns_list[5]: 'Cause_d_Arret'
+                        }
+                        # Update column_mapping with positions
+                        for col, mapped_col in mapping_by_position.items():
+                            if mapped_col not in column_mapping.values():
+                                column_mapping[col] = mapped_col
+                    else:
+                        # For files without headers, create them based on position
+                        df1.columns = required_columns[:len(df1.columns)]
+                        column_mapping = {col: col for col in df1.columns}
+                
+                # Rename columns
+                df1 = df1.rename(columns=column_mapping)
+                
+                # If we have a second sheet, try to incorporate that data as well
+                if len(sheet_names) > 1:
+                    df2 = pd.read_excel(xls, sheet_name=1)
+                    
+                    # Try to map columns from second sheet
+                    sheet2_mapping = {}
+                    for col in df2.columns:
+                        col_lower = str(col).lower()
+                        if any(well_term in col_lower for well_term in ['puits', 'well', 'nom']):
+                            sheet2_mapping[col] = 'Puits'
+                        elif any(term in col_lower for term in ['date']):
+                            sheet2_mapping[col] = 'Date_de_Fermeture'
+                        elif any(term in col_lower for term in ['volume', 'collecte']):
+                            sheet2_mapping[col] = 'MAP'
+                        elif any(term in col_lower for term in ['durée', 'duree', 'pompage']):
+                            sheet2_mapping[col] = 'Heures_d_Arret'
+                        elif any(term in col_lower for term in ['comment', 'commentaire']):
+                            sheet2_mapping[col] = 'Cause_d_Arret'
+                    
+                    # Rename columns in second sheet
+                    if sheet2_mapping:
+                        df2 = df2.rename(columns=sheet2_mapping)
+                        
+                        # Add missing columns if needed
+                        if 'Périmètre' not in df2.columns:
+                            df2['Périmètre'] = 'Unknown'
+                        if 'Cause_d_Arret' not in df2.columns:
+                            df2['Cause_d_Arret'] = 'LAVAGE'
+                        
+                        # Ensure we have the required columns before merging
+                        required_cols = ['Puits', 'Date_de_Fermeture', 'Heures_d_Arret', 'MAP']
+                        if all(col in df2.columns for col in required_cols):
+                            # Merge the two dataframes
+                            combined_df = pd.concat([df1, df2[df1.columns.intersection(df2.columns)]], ignore_index=True)
+                            df1 = combined_df
+                
+                # Process data types
+                if 'Date_de_Fermeture' in df1.columns:
+                    # Convert date strings to datetime objects
+                    try:
+                        df1['Date_de_Fermeture'] = pd.to_datetime(df1['Date_de_Fermeture'], errors='coerce')
+                    except:
+                        # If standard conversion fails, try with different formats
+                        date_formats = ['%d/%m/%Y', '%Y-%m-%d', '%m/%d/%Y', '%d-%m-%Y']
+                        for fmt in date_formats:
+                            try:
+                                df1['Date_de_Fermeture'] = pd.to_datetime(df1['Date_de_Fermeture'], format=fmt, errors='coerce')
+                                break
+                            except:
+                                continue
+                
+                # Ensure numeric columns are numeric
+                if 'Heures_d_Arret' in df1.columns:
+                    df1['Heures_d_Arret'] = pd.to_numeric(df1['Heures_d_Arret'], errors='coerce')
+                
+                if 'MAP' in df1.columns:
+                    # Replace commas with dots for decimal numbers and convert to numeric
+                    if df1['MAP'].dtype == object:  # If it's a string/object column
+                        df1['MAP'] = df1['MAP'].astype(str).str.replace(',', '.').astype(float, errors='coerce')
+                    else:
+                        df1['MAP'] = pd.to_numeric(df1['MAP'], errors='coerce')
+                
+                # Fill NaN values
+                df1 = df1.fillna({
+                    'Périmètre': 'Unknown',
+                    'Cause_d_Arret': 'LAVAGE',
+                    'Heures_d_Arret': df1['Heures_d_Arret'].median(),
+                    'MAP': df1['MAP'].median()
+                })
+                
+                return df1, None
+            
+            return None, "Format de données non reconnu. Vérifiez que votre fichier contient les colonnes nécessaires."
+            
+        except Exception as e:
+            return None, f"Erreur lors du traitement du fichier: {str(e)}"
 
 # Main Streamlit app
 def main():
@@ -227,27 +368,32 @@ def main():
     )
     
     # Load data based on selection
+    # Replace the file loading part in main() with this:
+
+    # Load data based on selection
     if data_option == "Charger un fichier Excel":
         uploaded_file = st.sidebar.file_uploader("Choisir un fichier Excel", type=["xlsx", "xls"])
         if uploaded_file is not None:
             try:
-                # Try different engines for Excel files
-                try:
-                    # First try with openpyxl (for .xlsx)
-                    analyzer.df = pd.read_excel(uploaded_file, engine='openpyxl')
-                except Exception:
-                    # If that fails, try with xlrd (for .xls)
-                    # Reset file position to beginning
-                    uploaded_file.seek(0)
-                    analyzer.df = pd.read_excel(uploaded_file, engine='xlrd')
+                # Process file with our new function
+                processed_df, error_msg = analyzer.load_excel_file(uploaded_file)
                 
-                # Rename columns to make them easier to handle
-                analyzer.df.columns = [col.replace(' ', '_') for col in analyzer.df.columns]
-                st.sidebar.success("Fichier chargé avec succès!")
+                if error_msg:
+                    st.sidebar.error(error_msg)
+                    analyzer.df = None
+                else:
+                    analyzer.df = processed_df
+                    st.sidebar.success("Fichier chargé avec succès!")
+                    
+                    # Show column mapping info
+                    with st.sidebar.expander("Informations sur les colonnes"):
+                        st.write("Colonnes détectées:")
+                        for col in analyzer.df.columns:
+                            st.write(f"- {col}")
             except Exception as e:
                 st.sidebar.error(f"Erreur lors du chargement du fichier: {str(e)}")
-                # Add more detailed error information
                 st.sidebar.info("Conseil: Vérifiez que votre fichier est au format Excel valide (.xlsx ou .xls). Si vous utilisez un format particulier, essayez de l'exporter en Excel standard.")
+                analyzer.df = None
         else:
             st.sidebar.info("Veuillez télécharger un fichier Excel ou utiliser les données d'exemple.")
             analyzer.df = None
