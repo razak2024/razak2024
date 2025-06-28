@@ -1,11 +1,11 @@
-pandas
-reportlab
-numpy
-datetime
-xlrd
-openpyxl
-streamlit
-csv
-json
-io
-base64
+# Web framework
+streamlit>=1.30.0
+
+# Data manipulation
+pandas>=1.5.0
+
+# PDF generation
+reportlab>=3.6.0
+
+# Date utilities (optional but useful with datetime operations)
+python-dateutil>=2.8.2
