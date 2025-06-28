@@ -1,8 +1,11 @@
 pandas
-matplotlib
-seaborn
+reportlab
 numpy
 datetime
 xlrd
 openpyxl
 streamlit
+csv
+json
+io
+base64
