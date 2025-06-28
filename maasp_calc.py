@@ -62,9 +62,9 @@ def create_well_info_tab():
     for i, (label, key) in enumerate(well_fields):
         with [col1, col2, col3][i % 3]:
             if key == "date":
-                st.session_state.well_info[key] = st.text_input(label, value=datetime.datetime.now().strftime("%Y-%m-%d"))
+                st.session_state.well_info[key] = st.text_input(label, value=datetime.datetime.now().strftime("%Y-%m-%d"), key=f"well_info_{key}")
             else:
-                st.session_state.well_info[key] = st.text_input(label, value="")
+                st.session_state.well_info[key] = st.text_input(label, value="", key=f"well_info_{key}")
 
 def create_calculator_tab():
     st.header("Calculator")
@@ -83,9 +83,9 @@ def create_calculator_tab():
     
     col1, col2 = st.columns(2)
     with col1:
-        if st.button("Calculate MAASP"):
+        if st.button("Calculate MAASP", key="calc_maasp_button"):
             calculate_all()
-        if st.button("Clear All"):
+        if st.button("Clear All", key="clear_all_button"):
             clear_all()
     with col2:
         save_config()
@@ -145,7 +145,7 @@ def create_a_annulus_long_casing_fields():
             ("Annulus Test Pressure (kPa)", "annulus_test_pressure", 25000)
         ])
     ]
-    create_parameter_groups(parameters, st.session_state.a_entries, st.session_state.a_checkboxes)
+    create_parameter_groups(parameters, st.session_state.a_entries, st.session_state.a_checkboxes, "a_")
 
 def create_a_annulus_liner_fields():
     parameters = [
@@ -194,7 +194,7 @@ def create_a_annulus_liner_fields():
             ("Annulus Test Pressure (kPa)", "annulus_test_pressure", 25000)
         ])
     ]
-    create_parameter_groups(parameters, st.session_state.a_entries, st.session_state.a_checkboxes)
+    create_parameter_groups(parameters, st.session_state.a_entries, st.session_state.a_checkboxes, "a_")
 
 def create_b_annulus_tab():
     if 'b_entries' not in st.session_state:
@@ -221,7 +221,7 @@ def create_b_annulus_tab():
             ("Depth (m)", "d_tvd_rd", 2300)
         ]),
         ("Gradients", [
-            (" exchangesMud Gradient B-annulus (kPa/m)", "vp_mg_b", 10.2),
+            ("Mud Gradient B-annulus (kPa/m)", "vp_mg_b", 10.2),
             ("Mud Gradient A-annulus (kPa/m)", "vp_mg_a", 10),
             ("Base Fluid Gradient C-annulus (kPa/m)", "vp_bf_c", 9.9)
         ]),
@@ -230,7 +230,7 @@ def create_b_annulus_tab():
             ("Annulus Test Pressure (kPa)", "annulus_test_pressure", 25000)
         ])
     ]
-    create_parameter_groups(parameters, st.session_state.b_entries, st.session_state.b_checkboxes)
+    create_parameter_groups(parameters, st.session_state.b_entries, st.session_state.b_checkboxes, "b_")
 
 def create_c_annulus_tab():
     if 'c_entries' not in st.session_state:
@@ -266,7 +266,7 @@ def create_c_annulus_tab():
             ("Annulus Test Pressure (kPa)", "annulus_test_pressure", 25000)
         ])
     ]
-    create_parameter_groups(parameters, st.session_state.c_entries, st.session_state.c_checkboxes)
+    create_parameter_groups(parameters, st.session_state.c_entries, st.session_state.c_checkboxes, "c_")
 
 def create_d_annulus_tab():
     if 'd_entries' not in st.session_state:
@@ -302,16 +302,27 @@ def create_d_annulus_tab():
             ("Annulus Test Pressure (kPa)", "annulus_test_pressure", 25000)
         ])
     ]
-    create_parameter_groups(parameters, st.session_state.d_entries, st.session_state.d_checkboxes)
+    create_parameter_groups(parameters, st.session_state.d_entries, st.session_state.d_checkboxes, "d_")
 
-def create_parameter_groups(parameters, entries_dict, checkboxes_dict):
+def create_parameter_groups(parameters, entries_dict, checkboxes_dict, annulus_prefix):
     for group_name, params in parameters:
         with st.expander(group_name, expanded=True):
-            checkboxes_dict[f"{group_name}_enabled"] = st.checkbox(f"Include {group_name} in calculation", value=True, key=f"{group_name}_enabled")
+            checkboxes_dict[f"{group_name}_enabled"] = st.checkbox(
+                f"Include {group_name} in calculation",
+                value=True,
+                key=f"{annulus_prefix}{group_name}_enabled"
+            )
             col1, col2 = st.columns(2)
             for i, (label, key, default) in enumerate(params):
                 with [col1, col2][i % 2]:
-                    entries_dict[key] = st.number_input(label, value=float(default), min_value=0.0, step=0.1, format="%.2f", key=f"{group_name}_{key}")
+                    entries_dict[key] = st.number_input(
+                        label,
+                        value=float(default),
+                        min_value=0.0,
+                        step=0.1,
+                        format="%.2f",
+                        key=f"{annulus_prefix}{group_name}_{key}"
+                    )
 
 def create_derating_tab():
     st.header("Derating Factors - ISO 16530-2")
@@ -331,9 +342,17 @@ def create_derating_tab():
     
     st.write("Apply derating factors according to ISO 16530-2")
     for label, key, default in derating_factors:
-        st.session_state.derating_entries[key] = st.number_input(label, value=float(default), min_value=0.0, max_value=1.0, step=0.01, format="%.2f", key=f"derating_{key}")
+        st.session_state.derating_entries[key] = st.number_input(
+            label,
+            value=float(default),
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+            format="%.2f",
+            key=f"derating_{key}"
+        )
     
-    st.session_state.apply_derating = st.checkbox("Apply derating factors to results", value=st.session_state.apply_derating)
+    st.session_state.apply_derating = st.checkbox("Apply derating factors to results", value=st.session_state.apply_derating, key="apply_derating")
 
 def create_results_tab():
     st.header("MAASP Calculation Results")
@@ -368,13 +387,13 @@ def create_results_tab():
         
         col1, col2, col3 = st.columns(3)
         with col1:
-            if st.button("Export to PDF"):
+            if st.button("Export to PDF", key="export_pdf_button"):
                 export_to_pdf()
         with col2:
-            if st.button("Export to CSV"):
+            if st.button("Export to CSV", key="export_csv_button"):
                 export_to_csv()
         with col3:
-            if st.button("Print Results"):
+            if st.button("Print Results", key="print_results_button"):
                 st.warning("Printing functionality not implemented. Please export to PDF or CSV instead.")
 
 def create_history_tab():
@@ -382,18 +401,19 @@ def create_history_tab():
     
     col1, col2, col3 = st.columns(3)
     with col1:
-        if st.button("Clear History"):
-            if st.checkbox("Confirm clear history"):
+        if st.button("Clear History", key="clear_history_button"):
+            if st.checkbox("Confirm clear history", key="confirm_clear_history"):
                 st.session_state.calculation_history = []
                 st.success("Calculation history cleared.")
     with col2:
-        if st.button("Export History"):
+        if st.button("Export History", key="export_history_button"):
             export_history()
     with col3:
         if st.session_state.calculation_history:
             selected_date = st.selectbox("Select calculation to load", 
-                                       [calc['date'] for calc in st.session_state.calculation_history])
-            if st.button("Load Previous"):
+                                       [calc['date'] for calc in st.session_state.calculation_history],
+                                       key="select_calculation")
+            if st.button("Load Previous", key="load_previous_button"):
                 load_previous_calculation(selected_date)
     
     if st.session_state.calculation_history:
@@ -832,7 +852,7 @@ def add_to_history(results):
     })
 
 def clear_all():
-    if st.checkbox("Confirm clear all inputs and results"):
+    if st.checkbox("Confirm clear all inputs and results", key="confirm_clear_all"):
         st.session_state.well_info = {key: "" for key in st.session_state.well_info}
         st.session_state.well_info['date'] = datetime.datetime.now().strftime("%Y-%m-%d")
         st.session_state.a_entries = {}
@@ -844,7 +864,7 @@ def clear_all():
         st.session_state.results = {}
         st.session_state.detailed_results = {}
         st.success("All inputs and results cleared.")
-        st.experimental_rerun()
+        st.rerun()
 
 def save_config():
     config = {
@@ -865,11 +885,12 @@ def save_config():
         label="Save Configuration",
         data=buffer,
         file_name="maasp_config.json",
-        mime="application/json"
+        mime="application/json",
+        key="save_config_button"
     )
 
 def load_config():
-    uploaded_file = st.file_uploader("Load Configuration", type=["json"])
+    uploaded_file = st.file_uploader("Load Configuration", type=["json"], key="load_config_uploader")
     if uploaded_file:
         try:
             config = json.load(uploaded_file)
@@ -896,7 +917,7 @@ def load_config():
             st.session_state.apply_derating = config.get('apply_derating', True)
             
             st.success("Configuration loaded successfully!")
-            st.experimental_rerun()
+            st.rerun()
         except Exception as e:
             st.error(f"Failed to load configuration: {str(e)}")
 
@@ -1018,7 +1039,7 @@ def load_previous_calculation(date):
                 st.session_state.detailed_results = calc['detailed_results']
                 
                 st.success("Previous calculation loaded successfully!")
-                st.experimental_rerun()
+                st.rerun()
             except Exception as e:
                 st.error(f"Failed to load previous calculation: {str(e)}")
             return
