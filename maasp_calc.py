@@ -24,6 +24,18 @@ def main():
         st.session_state.results = {}
     if 'detailed_results' not in st.session_state:
         st.session_state.detailed_results = {}
+    # Initialize derating_entries and apply_derating
+    if 'derating_entries' not in st.session_state:
+        st.session_state.derating_entries = {
+            'temp_factor': 0.95,
+            'service_factor': 0.90,
+            'mfg_factor': 0.85,
+            'design_factor': 0.80,
+            'install_factor': 0.95,
+            'env_factor': 0.90
+        }
+    if 'apply_derating' not in st.session_state:
+        st.session_state.apply_derating = True
     
     st.title("MAASP Calculator - ISO 16530-2")
     
@@ -326,10 +338,6 @@ def create_parameter_groups(parameters, entries_dict, checkboxes_dict, annulus_p
 
 def create_derating_tab():
     st.header("Derating Factors - ISO 16530-2")
-    if 'derating_entries' not in st.session_state:
-        st.session_state.derating_entries = {}
-    if 'apply_derating' not in st.session_state:
-        st.session_state.apply_derating = True
     
     derating_factors = [
         ("Temperature Derating Factor", "temp_factor", 0.95),
@@ -344,7 +352,7 @@ def create_derating_tab():
     for label, key, default in derating_factors:
         st.session_state.derating_entries[key] = st.number_input(
             label,
-            value=float(default),
+            value=float(st.session_state.derating_entries.get(key, default)),
             min_value=0.0,
             max_value=1.0,
             step=0.01,
@@ -859,7 +867,14 @@ def clear_all():
         st.session_state.b_entries = {}
         st.session_state.c_entries = {}
         st.session_state.d_entries = {}
-        st.session_state.derating_entries = {}
+        st.session_state.derating_entries = {
+            'temp_factor': 0.95,
+            'service_factor': 0.90,
+            'mfg_factor': 0.85,
+            'design_factor': 0.80,
+            'install_factor': 0.95,
+            'env_factor': 0.90
+        }
         st.session_state.apply_derating = True
         st.session_state.results = {}
         st.session_state.detailed_results = {}
